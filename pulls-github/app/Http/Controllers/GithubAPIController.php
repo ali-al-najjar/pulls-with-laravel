@@ -4,7 +4,7 @@ namespace App\Http\Controllers;
 
 use Illuminate\Support\Facades\Http;
 use Carbon\Carbon;
-
+use Revolution\Google\Sheets\Facades\Sheets;
 
 
 class GithubAPIController extends Controller
@@ -24,6 +24,21 @@ class GithubAPIController extends Controller
                 'Authorization' => 'Bearer ' . $this->token,
             ])->get('https://api.github.com/search/issues?q=repo:woocommerce/woocommerce+is:open+is:pr+created:<'.$date);
             $data = $response->json();
+            $prs = $data['items'];
+            $prData = [];
+            
+            foreach ($prs as $pr) {
+                $prData[] = [
+                    $pr['id'],
+                    $pr['title'],
+                    $pr['state'],
+                    $pr['html_url'],
+                    $pr['created_at']
+                ];
+            }
+            
+            Sheets::spreadsheet(env('POST_SPREADSHEET_ID', ''))->sheet('DataSheet')->append($prData);
+            
             return $data;
     }
 

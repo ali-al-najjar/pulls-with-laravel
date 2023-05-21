@@ -14,6 +14,7 @@ class GithubAPIController extends Controller
     public function __construct()
     {
         $this->token = env('GITHUB_TOKEN');
+        
     } 
         public function getPRs()
         {

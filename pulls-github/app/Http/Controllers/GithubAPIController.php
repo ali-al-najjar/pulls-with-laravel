@@ -20,19 +20,17 @@ class GithubAPIController extends Controller
         {
             $date = Carbon::today()->subDays(14)->format('Y-m-d');
             $response = Http::withHeaders([
-                'Accept' => 'application/vnd.github.v3+json',
+                'Accept' => 'application/vnd.github+json',
                 'Authorization' => 'Bearer ' . $this->token,
             ])->get('https://api.github.com/search/issues?q=repo:woocommerce/woocommerce+is:open+is:pr+created:<'.$date);
             $data = $response->json();
             return $data;
-
-
     }
 
     public function getPRsWithReview()
         {
             $response = Http::withHeaders([
-                'Accept' => 'application/vnd.github.v3+json',
+                'Accept' => 'application/vnd.github+json',
                 'Authorization' => 'Bearer ' . $this->token,
             ])->get('https://api.github.com/search/issues?q=repo:woocommerce/woocommerce+is:open+is:pr+review:required');
             $data = $response->json();
@@ -43,7 +41,7 @@ class GithubAPIController extends Controller
     public function getPRsWithSuccess()
         {
             $response = Http::withHeaders([
-                'Accept' => 'application/vnd.github.v3+json',
+                'Accept' => 'application/vnd.github+json',
                 'Authorization' => 'Bearer ' . $this->token,
             ])->get('https://api.github.com/search/issues?q=repo:woocommerce/woocommerce+is:open+is:pr+status:success');
             $data = $response->json();
@@ -54,7 +52,7 @@ class GithubAPIController extends Controller
     public function getunassignedPRs()
         {
             $response = Http::withHeaders([
-                'Accept' => 'application/vnd.github.v3+json',
+                'Accept' => 'application/vnd.github+json',
                 'Authorization' => 'Bearer ' . $this->token,
             ])->get('https://api.github.com/search/issues?q=repo:woocommerce/woocommerce+is:open+is:pr+no:assignee');
             $data = $response->json();

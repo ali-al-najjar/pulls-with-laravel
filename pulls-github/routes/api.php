@@ -19,4 +19,5 @@ Route::middleware('auth:sanctum')->get('/user', function (Request $request) {
     return $request->user();
 });
 
-Route::get('/pull-requests', [GithubAPIController::class, 'getPullRequests']);
+Route::get('/prs', [GithubAPIController::class, 'getPRs']);
+Route::get('/prs-with-review', [GithubAPIController::class, 'getPRsWithReview']);

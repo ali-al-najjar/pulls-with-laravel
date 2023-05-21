@@ -30,6 +30,7 @@ class GithubAPIController extends Controller
             foreach ($prs as $pr) {
                 $prData[] = [
                     $pr['id'],
+                    $pr['number'],
                     $pr['title'],
                     $pr['state'],
                     $pr['html_url'],
@@ -37,10 +38,11 @@ class GithubAPIController extends Controller
                 ];
             }
             
-            Sheets::spreadsheet(env('POST_SPREADSHEET_ID', ''))->sheet('DataSheet')->append($prData);
-            
+            Sheets::spreadsheet(env('POST_SPREADSHEET_ID', ''))->sheet('Open PRs')->append($prData);
+            $count = count($data['items']);
+            echo $count;
             return $data;
-    }
+        }
 
     public function getPRsWithReview()
         {
@@ -49,6 +51,21 @@ class GithubAPIController extends Controller
                 'Authorization' => 'Bearer ' . $this->token,
             ])->get('https://api.github.com/search/issues?q=repo:woocommerce/woocommerce+is:open+is:pr+review:required');
             $data = $response->json();
+            $prs = $data['items'];
+            $prData = [];
+            
+            foreach ($prs as $pr) {
+                $prData[] = [
+                    $pr['id'],
+                    $pr['number'],
+                    $pr['title'],
+                    $pr['state'],
+                    $pr['html_url'],
+                    $pr['created_at']
+                ];
+            }
+            
+            Sheets::spreadsheet(env('POST_SPREADSHEET_ID', ''))->sheet('PRs with Reviews')->append($prData);
             return $data;
 
     }
@@ -60,6 +77,21 @@ class GithubAPIController extends Controller
                 'Authorization' => 'Bearer ' . $this->token,
             ])->get('https://api.github.com/search/issues?q=repo:woocommerce/woocommerce+is:open+is:pr+status:success');
             $data = $response->json();
+            $prs = $data['items'];
+            $prData = [];
+            
+            foreach ($prs as $pr) {
+                $prData[] = [
+                    $pr['id'],
+                    $pr['number'],
+                    $pr['title'],
+                    $pr['state'],
+                    $pr['html_url'],
+                    $pr['created_at']
+                ];
+            }
+            
+            Sheets::spreadsheet(env('POST_SPREADSHEET_ID', ''))->sheet('PRs with Success')->append($prData);
             return $data;
 
     }
@@ -71,10 +103,24 @@ class GithubAPIController extends Controller
                 'Authorization' => 'Bearer ' . $this->token,
             ])->get('https://api.github.com/search/issues?q=repo:woocommerce/woocommerce+is:open+is:pr+no:assignee');
             $data = $response->json();
+            $prs = $data['items'];
+            $prData = [];
+            
+            foreach ($prs as $pr) {
+                $prData[] = [
+                    $pr['id'],
+                    $pr['number'],
+                    $pr['title'],
+                    $pr['state'],
+                    $pr['html_url'],
+                    $pr['created_at']
+                ];
+            }
+            
+            Sheets::spreadsheet(env('POST_SPREADSHEET_ID', ''))->sheet('PRs without assignees')->append($prData);
             return $data;
 
     }
-
 
 }
     

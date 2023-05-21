@@ -50,6 +50,17 @@ class GithubAPIController extends Controller
 
     }
 
+    public function getunassignedPRs()
+        {
+            $response = Http::withHeaders([
+                'Accept' => 'application/vnd.github.v3+json',
+                'Authorization' => 'Bearer ' . $this->token,
+            ])->get('https://api.github.com/search/issues?q=repo:woocommerce/woocommerce+is:open+is:pr+no:assignee');
+            $data = $response->json();
+            return $data;
+
+    }
+
 
 }
     

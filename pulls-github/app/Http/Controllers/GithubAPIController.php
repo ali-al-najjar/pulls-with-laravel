@@ -20,6 +20,8 @@ class GithubAPIController extends Controller
         
     } 
 
+##List of all open pull requests created more than 14 days ago
+
     public function getOpenPRs()
     {
         $date = Carbon::today()->subDays(14)->format('Y-m-d');
@@ -33,7 +35,14 @@ class GithubAPIController extends Controller
             'Link',
             'Created At'
         ];
-        Sheets::spreadsheet(env('POST_SPREADSHEET_ID', ''))->sheet('Open PRs')->append([$header]);
+        
+        $spreadsheet = Sheets::spreadsheet(env('POST_SPREADSHEET_ID', ''));
+        $sheet = $spreadsheet->sheet('Open PRs');
+        $existingPRs = $sheet->all();
+        if (empty($existingPRs)) {
+            $sheet->append([$header]);
+        }
+    
         while ($hasNextPage) {
             $response = Http::withHeaders([
                 'Accept' => 'application/vnd.github+json',
@@ -44,6 +53,7 @@ class GithubAPIController extends Controller
             $prs = $data['items'];
             $prData = [];
             $linkHeader = $response->header('Link');
+            
             if ($linkHeader) {
                 $links = $this->parseLinkHeader($linkHeader);
                 if (isset($links['next'])) {
@@ -54,23 +64,113 @@ class GithubAPIController extends Controller
             } else {
                 $hasNextPage = false;
             }
-            
+    
             foreach ($prs as $pr) {
-                $prData[] = [
-                    $pr['id'],
-                    $pr['number'],
-                    $pr['title'],
-                    $pr['state'],
-                    $pr['html_url'],
-                    $pr['created_at']
-                ];
+                $prId = $pr['id'];
+                $prExists = false;
+                
+                foreach ($existingPRs as $existingPR) {
+                    if ($existingPR[0] == $prId) {
+                        $prExists = true;
+                        break;
+                    }
+                }
+    
+                if (!$prExists) {
+                    $prData[] = [
+                        $prId,
+                        $pr['number'],
+                        $pr['title'],
+                        $pr['state'],
+                        $pr['html_url'],
+                        $pr['created_at']
+                    ];
+                }
             }
-            
-            Sheets::spreadsheet(env('POST_SPREADSHEET_ID', ''))->sheet('Open PRs')->append($prData);
+    
+            if (!empty($prData)) {
+                $sheet->append($prData);
+            }
         }
-        
+    
         return $data;
     }
+    
+
+##  List of all open pull requests with a review required:
+
+    public function getPRsRequired()
+        {
+            $page = 1;
+            $hasNextPage = true;
+            $header = [
+                'PR-ID',
+                'PR#',
+                'PR-Title',
+                'State',
+                'Link',
+                'Created At'
+            ];
+            $spreadsheet = Sheets::spreadsheet(env('POST_SPREADSHEET_ID', ''));
+            $sheet = $spreadsheet->sheet('PRs Required');
+            $existingPRs = $sheet->all();
+            if (empty($existingPRs)) {
+                $sheet->append([$header]);
+            }
+
+            while ($hasNextPage) {
+                $response = Http::withHeaders([
+                    'Accept' => 'application/vnd.github+json',
+                    'Authorization' => 'Bearer ' . $this->token,
+                ])->get("https://api.github.com/search/issues?page=$page&q=repo:{$this->owner}/{$this->repo}+is:open+is:pr+review:required");
+        
+                $data = $response->json();
+                $prs = $data['items'];
+                $prData = [];
+                $linkHeader = $response->header('Link');
+                if ($linkHeader) {
+                    $links = $this->parseLinkHeader($linkHeader);
+                    if (isset($links['next'])) {
+                        $page++;
+                    } else {
+                        $hasNextPage = false;
+                    }
+                } else {
+                    $hasNextPage = false;
+                }
+                
+                foreach ($prs as $pr) {
+                    $prId = $pr['id'];
+                    $prExists = false;
+                    
+                    foreach ($existingPRs as $existingPR) {
+                        if ($existingPR[0] == $prId) {
+                            $prExists = true;
+                            break;
+                        }
+                    }
+        
+                    if (!$prExists) {
+                        $prData[] = [
+                            $prId,
+                            $pr['number'],
+                            $pr['title'],
+                            $pr['state'],
+                            $pr['html_url'],
+                            $pr['created_at']
+                        ];
+                    }
+                }
+        
+                if (!empty($prData)) {
+                    $sheet->append($prData);
+                }
+            }
+        
+            return $data;
+        }
+
+##  List of all open pull requests where review status is `success`:
 
     public function getPRsWithSuccess()
     {
@@ -84,7 +184,13 @@ class GithubAPIController extends Controller
             'Link',
             'Created At'
         ];
-        Sheets::spreadsheet(env('POST_SPREADSHEET_ID', ''))->sheet('PRs with Success')->append([$header]);
+        $spreadsheet = Sheets::spreadsheet(env('POST_SPREADSHEET_ID', ''));
+        $sheet = $spreadsheet->sheet('PRs with Success');
+        $existingPRs = $sheet->all();
+        if (empty($existingPRs)) {
+            $sheet->append([$header]);
+        }
+
         while ($hasNextPage) {
             $response = Http::withHeaders([
                 'Accept' => 'application/vnd.github+json',
@@ -107,21 +213,37 @@ class GithubAPIController extends Controller
             }
             
             foreach ($prs as $pr) {
-                $prData[] = [
-                    $pr['id'],
-                    $pr['number'],
-                    $pr['title'],
-                    $pr['state'],
-                    $pr['html_url'],
-                    $pr['created_at']
-                ];
+                $prId = $pr['id'];
+                $prExists = false;
+                
+                foreach ($existingPRs as $existingPR) {
+                    if ($existingPR[0] == $prId) {
+                        $prExists = true;
+                        break;
+                    }
+                }
+    
+                if (!$prExists) {
+                    $prData[] = [
+                        $prId,
+                        $pr['number'],
+                        $pr['title'],
+                        $pr['state'],
+                        $pr['html_url'],
+                        $pr['created_at']
+                    ];
+                }
             }
-            
-            Sheets::spreadsheet(env('POST_SPREADSHEET_ID', ''))->sheet('PRs with Success')->append($prData);
+    
+            if (!empty($prData)) {
+                $sheet->append($prData);
+            }
         }
-        
+    
         return $data;
     }
+
+## List of all open pull requests with no reviews requested (no assigned reviewers)
 
     public function getUnassignedPRs()
     {
@@ -135,7 +257,13 @@ class GithubAPIController extends Controller
             'Link',
             'Created At'
         ];
-        Sheets::spreadsheet(env('POST_SPREADSHEET_ID', ''))->sheet('PRs without assignees')->append([$header]);
+        $spreadsheet = Sheets::spreadsheet(env('POST_SPREADSHEET_ID', ''));
+        $sheet = $spreadsheet->sheet('PPRs without assignees');
+        $existingPRs = $sheet->all();
+        if (empty($existingPRs)) {
+            $sheet->append([$header]);
+        }
+
         while ($hasNextPage) {
             $response = Http::withHeaders([
                 'Accept' => 'application/vnd.github+json',
@@ -158,74 +286,38 @@ class GithubAPIController extends Controller
             }
             
             foreach ($prs as $pr) {
-                $prData[] = [
-                    $pr['id'],
-                    $pr['number'],
-                    $pr['title'],
-                    $pr['state'],
-                    $pr['html_url'],
-                    $pr['created_at']
-                ];
-            }
-            
-            Sheets::spreadsheet(env('POST_SPREADSHEET_ID', ''))->sheet('PRs without assignees')->append($prData);
-        }
-        
-        return $data;
-    }
-
-    public function getPRsRequired()
-    {
-        $page = 1;
-        $hasNextPage = true;
-        $header = [
-            'PR-ID',
-            'PR#',
-            'PR-Title',
-            'State',
-            'Link',
-            'Created At'
-        ];
-        Sheets::spreadsheet(env('POST_SPREADSHEET_ID', ''))->sheet('PRs Required')->append([$header]);
-        while ($hasNextPage) {
-            $response = Http::withHeaders([
-                'Accept' => 'application/vnd.github+json',
-                'Authorization' => 'Bearer ' . $this->token,
-            ])->get("https://api.github.com/search/issues?page=$page&q=repo:{$this->owner}/{$this->repo}+is:open+is:pr+review:required");
-    
-            $data = $response->json();
-            $prs = $data['items'];
-            $prData = [];
-            $linkHeader = $response->header('Link');
-            if ($linkHeader) {
-                $links = $this->parseLinkHeader($linkHeader);
-                if (isset($links['next'])) {
-                    $page++;
-                } else {
-                    $hasNextPage = false;
+                $prId = $pr['id'];
+                $prExists = false;
+                
+                foreach ($existingPRs as $existingPR) {
+                    if ($existingPR[0] == $prId) {
+                        $prExists = true;
+                        break;
+                    }
                 }
-            } else {
-                $hasNextPage = false;
+    
+                if (!$prExists) {
+                    $prData[] = [
+                        $prId,
+                        $pr['number'],
+                        $pr['title'],
+                        $pr['state'],
+                        $pr['html_url'],
+                        $pr['created_at']
+                    ];
+                }
             }
-            
-            foreach ($prs as $pr) {
-                $prData[] = [
-                    $pr['id'],
-                    $pr['number'],
-                    $pr['title'],
-                    $pr['state'],
-                    $pr['html_url'],
-                    $pr['created_at']
-                ];
+    
+            if (!empty($prData)) {
+                $sheet->append($prData);
             }
-            
-            Sheets::spreadsheet(env('POST_SPREADSHEET_ID', ''))->sheet('PRs Required')->append($prData);
         }
-        
+    
         return $data;
     }
 
-
+    
+## Pagination Function:
 
     private function parseLinkHeader($header)
     {

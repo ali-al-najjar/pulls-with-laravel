@@ -100,75 +100,75 @@ class GithubAPIController extends Controller
 ##  List of all open pull requests with a review required:
 
     public function getPRsRequired()
-        {
-            $page = 1;
-            $hasNextPage = true;
-            $header = [
-                'PR-ID',
-                'PR#',
-                'PR-Title',
-                'State',
-                'Link',
-                'Created At'
-            ];
-            $spreadsheet = Sheets::spreadsheet(env('POST_SPREADSHEET_ID', ''));
-            $sheet = $spreadsheet->sheet('PRs Required');
-            $existingPRs = $sheet->all();
-            if (empty($existingPRs)) {
-                $sheet->append([$header]);
-            }
+    {
+        $page = 1;
+        $hasNextPage = true;
+        $header = [
+            'PR-ID',
+            'PR#',
+            'PR-Title',
+            'State',
+            'Link',
+            'Created At'
+        ];
+        $spreadsheet = Sheets::spreadsheet(env('POST_SPREADSHEET_ID', ''));
+        $sheet = $spreadsheet->sheet('PRs Required');
+        $existingPRs = $sheet->all();
+        if (empty($existingPRs)) {
+            $sheet->append([$header]);
+        }
 
-            while ($hasNextPage) {
-                $response = Http::withHeaders([
-                    'Accept' => 'application/vnd.github+json',
-                    'Authorization' => 'Bearer ' . $this->token,
-                ])->get("https://api.github.com/search/issues?page=$page&q=repo:{$this->owner}/{$this->repo}+is:open+is:pr+review:required");
+        while ($hasNextPage) {
+            $response = Http::withHeaders([
+                'Accept' => 'application/vnd.github+json',
+                'Authorization' => 'Bearer ' . $this->token,
+            ])->get("https://api.github.com/search/issues?page=$page&q=repo:{$this->owner}/{$this->repo}+is:open+is:pr+review:required");
         
-                $data = $response->json();
-                $prs = $data['items'];
-                $prData = [];
-                $linkHeader = $response->header('Link');
-                if ($linkHeader) {
-                    $links = $this->parseLinkHeader($linkHeader);
-                    if (isset($links['next'])) {
-                        $page++;
-                    } else {
-                        $hasNextPage = false;
-                    }
+            $data = $response->json();
+            $prs = $data['items'];
+            $prData = [];
+            $linkHeader = $response->header('Link');
+            if ($linkHeader) {
+                $links = $this->parseLinkHeader($linkHeader);
+                if (isset($links['next'])) {
+                    $page++;
                 } else {
                     $hasNextPage = false;
                 }
+            } else {
+                $hasNextPage = false;
+            }
                 
-                foreach ($prs as $pr) {
-                    $prId = $pr['id'];
-                    $prExists = false;
+            foreach ($prs as $pr) {
+                $prId = $pr['id'];
+                $prExists = false;
                     
-                    foreach ($existingPRs as $existingPR) {
-                        if ($existingPR[0] == $prId) {
-                            $prExists = true;
-                            break;
-                        }
-                    }
-        
-                    if (!$prExists) {
-                        $prData[] = [
-                            $prId,
-                            $pr['number'],
-                            $pr['title'],
-                            $pr['state'],
-                            $pr['html_url'],
-                            $pr['created_at']
-                        ];
+                foreach ($existingPRs as $existingPR) {
+                    if ($existingPR[0] == $prId) {
+                        $prExists = true;
+                        break;
                     }
                 }
         
-                if (!empty($prData)) {
-                    $sheet->append($prData);
+                if (!$prExists) {
+                    $prData[] = [
+                        $prId,
+                        $pr['number'],
+                        $pr['title'],
+                        $pr['state'],
+                        $pr['html_url'],
+                        $pr['created_at']
+                    ];
                 }
             }
         
-            return $data;
+            if (!empty($prData)) {
+                $sheet->append($prData);
+            }
         }
+        
+        return $data;
+    }
 
 ##  List of all open pull requests where review status is `success`:
 

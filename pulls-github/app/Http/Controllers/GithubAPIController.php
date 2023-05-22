@@ -6,28 +6,89 @@ use Illuminate\Support\Facades\Http;
 use Carbon\Carbon;
 use Revolution\Google\Sheets\Facades\Sheets;
 
-
 class GithubAPIController extends Controller
 {
     public $token;
+    public $owner;
+    public $repo;
 
     public function __construct()
     {
         $this->token = env('GITHUB_TOKEN');
+        $this->owner = "woocommerce";
+        $this->repo = "woocommerce";
         
     } 
         public function getPRs()
         {
+            $state = "open";
             $date = Carbon::today()->subDays(14)->format('Y-m-d');
-            $response = Http::withHeaders([
-                'Accept' => 'application/vnd.github+json',
-                'Authorization' => 'Bearer ' . $this->token,
-            ])->get('https://api.github.com/search/issues?q=repo:woocommerce/woocommerce+is:open+is:pr+created:<'.$date);
-            $data = $response->json();
-            $prs = $data['items'];
+            $page = 1;
+            $perPage = 30;
+            $hasNextPage = true;
+            $data = [];
+
+            $header = [
+                'PR-ID',
+                'PR#',
+                'PR-Title',
+                'State',
+                'Link',
+                'Created At'
+            ];
+            Sheets::spreadsheet(env('POST_SPREADSHEET_ID', ''))->sheet('Open PRs')->append([$header]);
+            
+            $values = Sheets::spreadsheet(env('POST_SPREADSHEET_ID', ''))->all();
+            $fields = $values[0];
+            $sheetData = [];
+            for ($i = 1; $i < count($values); $i++) {
+                $row = $values[$i];
+                $rowData = [];
+                for ($j = 0; $j < count($row); $j++) {
+                    $rowData[$fields[$j]] = $row[$j];
+                }
+
+                $sheetData[] = $rowData;
+            }
+            $jsonData = json_encode($sheetData);
+            
+
+            while ($hasNextPage) {
+                $response = Http::withHeaders([
+                    'Accept' => 'application/vnd.github+json',
+                    'Authorization' => 'Bearer ' . $this->token,
+                    'X-GitHub-Api-Version: 2022-11-28'
+                ])
+                    ->timeout(60)
+                    ->get("https://api.github.com/repos/{$this->owner}/{$this->repo}/pulls", [
+                        'state' => $state,
+                        'per_page' => $perPage,
+                        'page' => $page,
+                        'direction' => 'desc',
+                    ]);
+        
+                $responseData = $response->json();
+                $filteredData = array_filter($responseData, function ($pr) use ($date) {
+                    return $pr['created_at'] < $date;
+                });
+        
+                $data = array_merge($data, $filteredData);
+
+                $linkHeader = $response->header('Link');
+                if ($linkHeader) {
+                    $links = $this->parseLinkHeader($linkHeader);
+                    if (isset($links['next'])) {
+                        $page++;
+                    } else {
+                        $hasNextPage = false;
+                    }
+                } else {
+                    $hasNextPage = false;
+                }
+            }
             $prData = [];
             
-            foreach ($prs as $pr) {
+            foreach ($data as $pr) {
                 $prData[] = [
                     $pr['id'],
                     $pr['number'],
@@ -37,19 +98,27 @@ class GithubAPIController extends Controller
                     $pr['created_at']
                 ];
             }
-            
-            Sheets::spreadsheet(env('POST_SPREADSHEET_ID', ''))->sheet('Open PRs')->append($prData);
-            $count = count($data['items']);
-            echo $count;
-            return $data;
+            if (count($values) <= 1) {
+                Sheets::spreadsheet(env('POST_SPREADSHEET_ID', ''))->sheet('Open PRs')->append($prData);
+            } else {
+                $existingPRs = array_column($sheetData, 'PR-ID');
+                $newData = array_filter($prData, function ($pr) use ($existingPRs) {
+                    return !in_array($pr[0], $existingPRs);
+                });
+                if (!empty($newData)) {
+                    Sheets::spreadsheet(env('POST_SPREADSHEET_ID', ''))->sheet('Open PRs')->append($newData);
+                }
+            }
+            return $jsonData;
         }
+
 
     public function getPRsWithReview()
         {
             $response = Http::withHeaders([
                 'Accept' => 'application/vnd.github+json',
                 'Authorization' => 'Bearer ' . $this->token,
-            ])->get('https://api.github.com/search/issues?q=repo:woocommerce/woocommerce+is:open+is:pr+review:required');
+            ])->get("https://api.github.com/search/issues?q=repo:{$this->owner}/{$this->repo}+is:open+is:pr+review:required");
             $data = $response->json();
             $prs = $data['items'];
             $prData = [];
@@ -75,7 +144,7 @@ class GithubAPIController extends Controller
             $response = Http::withHeaders([
                 'Accept' => 'application/vnd.github+json',
                 'Authorization' => 'Bearer ' . $this->token,
-            ])->get('https://api.github.com/search/issues?q=repo:woocommerce/woocommerce+is:open+is:pr+status:success');
+            ])->get("https://api.github.com/search/issues?q=repo:{$this->owner}/{$this->repo}+is:open+is:pr+status:success");
             $data = $response->json();
             $prs = $data['items'];
             $prData = [];
@@ -101,7 +170,7 @@ class GithubAPIController extends Controller
             $response = Http::withHeaders([
                 'Accept' => 'application/vnd.github+json',
                 'Authorization' => 'Bearer ' . $this->token,
-            ])->get('https://api.github.com/search/issues?q=repo:woocommerce/woocommerce+is:open+is:pr+no:assignee');
+            ])->get("https://api.github.com/search/issues?q=repo:{$this->owner}/{$this->repo}+is:open+is:pr+no:assignee");
             $data = $response->json();
             $prs = $data['items'];
             $prData = [];
@@ -120,6 +189,22 @@ class GithubAPIController extends Controller
             Sheets::spreadsheet(env('POST_SPREADSHEET_ID', ''))->sheet('PRs without assignees')->append($prData);
             return $data;
 
+    }
+
+    
+    private function parseLinkHeader($header)
+    {
+        $links = [];
+        $matches = [];
+        $pattern = '/<([^>]+)>;\s*rel="([^"]+)"/';
+
+        preg_match_all($pattern, $header, $matches);
+
+        foreach ($matches[2] as $index => $rel) {
+            $links[$rel] = $matches[1][$index];
+        }
+
+        return $links;
     }
 
 }

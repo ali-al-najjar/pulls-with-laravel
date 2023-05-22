@@ -19,7 +19,8 @@ Route::middleware('auth:sanctum')->get('/user', function (Request $request) {
     return $request->user();
 });
 
-Route::get('/prs', [GithubAPIController::class, 'getPRs']);
-Route::get('/prs-with-review', [GithubAPIController::class, 'getPRsWithReview']);
+Route::get('/prs', [GithubAPIController::class, 'getOpenPRs']);
+Route::get('/prs-required', [GithubAPIController::class, 'getPRsRequired']);
 Route::get('/prs-with-success', [GithubAPIController::class, 'getPRsWithSuccess']);
 Route::get('/prs-without-assignees', [GithubAPIController::class, 'getUnassignedPRs']);
+

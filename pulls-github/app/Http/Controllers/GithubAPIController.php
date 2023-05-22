@@ -38,7 +38,7 @@ class GithubAPIController extends Controller
             ];
             Sheets::spreadsheet(env('POST_SPREADSHEET_ID', ''))->sheet('Open PRs')->append([$header]);
             
-            $values = Sheets::spreadsheet(env('POST_SPREADSHEET_ID', ''))->all();
+            $values = Sheets::spreadsheet(env('POST_SPREADSHEET_ID', ''))->sheet('Open PRs')->all();
             $fields = $values[0];
             $sheetData = [];
             for ($i = 1; $i < count($values); $i++) {
@@ -109,21 +109,81 @@ class GithubAPIController extends Controller
                     Sheets::spreadsheet(env('POST_SPREADSHEET_ID', ''))->sheet('Open PRs')->append($newData);
                 }
             }
-            return $jsonData;
+            $count = count($data);
+            echo $count;
+            return $data;
         }
 
 
     public function getPRsWithReview()
         {
-            $response = Http::withHeaders([
-                'Accept' => 'application/vnd.github+json',
-                'Authorization' => 'Bearer ' . $this->token,
-            ])->get("https://api.github.com/search/issues?q=repo:{$this->owner}/{$this->repo}+is:open+is:pr+review:required");
-            $data = $response->json();
-            $prs = $data['items'];
+            $state = "open";
+            $page = 1;
+            $perPage = 30;
+            $hasNextPage = true;
+            $data = [];
+
+            $header = [
+                'PR-ID',
+                'PR#',
+                'PR-Title',
+                'State',
+                'Link',
+                'Created At'
+            ];
+            Sheets::spreadsheet(env('POST_SPREADSHEET_ID', ''))->sheet('PRs with Reviews')->append([$header]);
+            
+            $values = Sheets::spreadsheet(env('POST_SPREADSHEET_ID', ''))->sheet('PRs with Reviews')->all();
+            $fields = $values[0];
+            $sheetData = [];
+            for ($i = 1; $i < count($values); $i++) {
+                $row = $values[$i];
+                $rowData = [];
+                for ($j = 0; $j < count($row); $j++) {
+                    $rowData[$fields[$j]] = $row[$j];
+                }
+
+                $sheetData[] = $rowData;
+            }
+            $jsonData = json_encode($sheetData);
+            
+
+            while ($hasNextPage) {
+                $response = Http::withHeaders([
+                    'Accept' => 'application/vnd.github+json',
+                    'Authorization' => 'Bearer ' . $this->token,
+                    'X-GitHub-Api-Version: 2022-11-28'
+                ])
+                    ->timeout(60)
+                    ->get("https://api.github.com/repos/{$this->owner}/{$this->repo}/pulls", [
+                        'state' => $state,
+                        'per_page' => $perPage,
+                        'page' => $page,
+                        'direction' => 'desc',
+                    ]);
+        
+                $responseData = $response->json();
+                $filteredData = array_filter($responseData, function ($pr) {
+                    return !empty($pr['requested_reviewers']);
+                });
+        
+                $data = array_merge($data, $filteredData);
+
+                $linkHeader = $response->header('Link');
+                if ($linkHeader) {
+                    $links = $this->parseLinkHeader($linkHeader);
+                    if (isset($links['next'])) {
+                        $page++;
+                    } else {
+                        $hasNextPage = false;
+                    }
+                } else {
+                    $hasNextPage = false;
+                }
+            }
             $prData = [];
             
-            foreach ($prs as $pr) {
+            foreach ($data as $pr) {
                 $prData[] = [
                     $pr['id'],
                     $pr['number'],
@@ -133,10 +193,20 @@ class GithubAPIController extends Controller
                     $pr['created_at']
                 ];
             }
-            
-            Sheets::spreadsheet(env('POST_SPREADSHEET_ID', ''))->sheet('PRs with Reviews')->append($prData);
+            if (count($values) <= 1) {
+                Sheets::spreadsheet(env('POST_SPREADSHEET_ID', ''))->sheet('PRs with Reviews')->append($prData);
+            } else {
+                $existingPRs = array_column($sheetData, 'PR-ID');
+                $newData = array_filter($prData, function ($pr) use ($existingPRs) {
+                    return !in_array($pr[0], $existingPRs);
+                });
+                if (!empty($newData)) {
+                    Sheets::spreadsheet(env('POST_SPREADSHEET_ID', ''))->sheet('PRs with Reviews')->append($newData);
+                }
+            }
+            $count = count($data);
+            echo $count;
             return $data;
-
     }
 
     public function getPRsWithSuccess()

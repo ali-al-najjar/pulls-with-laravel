@@ -258,7 +258,7 @@ class GithubAPIController extends Controller
             'Created At'
         ];
         $spreadsheet = Sheets::spreadsheet(env('POST_SPREADSHEET_ID', ''));
-        $sheet = $spreadsheet->sheet('PPRs without assignees');
+        $sheet = $spreadsheet->sheet('PRs without assignees');
         $existingPRs = $sheet->all();
         if (empty($existingPRs)) {
             $sheet->append([$header]);
